@@ -36,3 +36,9 @@ format.
 
 int inf(QIODevice *src, QIODevice *dest, ZCompressor::CompressFormat format) - decompress data from
 src to dest at a time, with certain compress format.
+
+
+Building on linux:
+mkdir build && cd build
+cmake -DCMAKE_BUILD_TYPE=Release ../
+make
