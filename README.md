@@ -1,4 +1,4 @@
-Compressor based on zlib with QIODevice interface.
+Compression library based on zlib with QIODevice interface.
 
 Works like all QIODevice objects. Compresses when write to device and decompresses when read from
 device.
@@ -38,7 +38,8 @@ int inf(QIODevice *src, QIODevice *dest, ZCompressor::CompressFormat format) - d
 src to dest at a time, with certain compress format.
 
 Building on linux for static library and cli program:
-mkdir build && cd build
+Install zlib dev package. In Ubuntu zlib1g-dev.
+mkdir build
+cd build
 cmake -DCMAKE_BUILD_TYPE=Release ../
 make
-

@@ -35,12 +35,12 @@ int main(int argc, char *argv[])
     parser.addOption(decmpOpt);
     QCommandLineOption formatOpt(QStringList{QStringLiteral("f"), QStringLiteral("format")},
                                  QStringLiteral("Compression format."),
-                                 QStringLiteral("format-value Zlib, Gzip, RawDeflate"),
+                                 QStringLiteral("format value Zlib, Gzip, RawDeflate"),
                                  QStringLiteral("Zlib"));
     parser.addOption(formatOpt);
     QCommandLineOption lvlOpt(QStringList{QStringLiteral("l"), QStringLiteral("level")},
                                 QStringLiteral("Compression level. Ignores if decompress."),
-                                QStringLiteral("level-value 0-9"));
+                                QStringLiteral("level value 0-9"));
     parser.addOption(lvlOpt);
     parser.addHelpOption();
     parser.process(app);
@@ -77,10 +77,18 @@ int main(int argc, char *argv[])
         bool ok = false;
         lvl = lvlVal.toInt(&ok);
         if (!ok)
-            lvl = Z_DEFAULT_COMPRESSION;
+        {
+            if (!lvlVal.isEmpty())
+            {
+                qDebug() << "Invalid compression level! Must be from 0 to 9.";
+                return 1;
+            }
+            else
+                lvl = Z_DEFAULT_COMPRESSION;
+        }
         else if (lvl < 0 || lvl > 9)
         {
-            qDebug() << "Invalid compression level! Must bee between 0 and 9.";
+            qDebug() << "Invalid compression level range! Must be from 0 to 9.";
             return 1;
         }
     }
