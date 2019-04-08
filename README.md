@@ -37,7 +37,7 @@ format.
 int inf(QIODevice *src, QIODevice *dest, ZCompressor::CompressFormat format) - decompress data from
 src to dest at a time, with certain compress format.
 
-Building on linux:
+Building in Linux:
 Install zlib dev package. In Ubuntu zlib1g-dev.
 mkdir build
 cd build
@@ -45,3 +45,10 @@ cmake -DCMAKE_BUILD_TYPE=Release ../
 make
 
 cli program will be in bin folder, libraries will be in lib folder.
+
+Building in Windows with MSVC 2017:
+Download or build zlib.
+mkdir build
+cd build
+cmake -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=<path Qt MSVC>
+-DZLIB_DIR=<path to zlib lib file> -DZLIB_INCLUDE=<path to zlib include files> ..
