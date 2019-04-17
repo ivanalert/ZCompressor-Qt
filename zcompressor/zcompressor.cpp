@@ -17,27 +17,6 @@
 
 #include "zcompressor.h"
 
-const unsigned ZCompressor::CHUNK(16384);
-
-ZCompressor::ZCompressor(QObject *parent)
-    : QIODevice(parent), m_device(nullptr), m_level(6), m_format(ZlibFormat),
-      m_state(Z_OK), m_end(false), m_buffer((unsigned char*)malloc(CHUNK))
-{
-
-}
-
-ZCompressor::ZCompressor(QIODevice *device, QObject *parent)
-    : QIODevice(parent), m_device(device), m_level(6), m_format(ZlibFormat),
-      m_state(Z_OK), m_end(false), m_buffer((unsigned char*)malloc(CHUNK))
-{
-    connect(m_device, &QIODevice::readyRead, this, &ZCompressor::readyRead);
-}
-
-ZCompressor::~ZCompressor()
-{
-    close();
-}
-
 bool ZCompressor::open(QIODevice::OpenMode mode)
 {
     if (!isOpen() && m_device && m_device->isOpen())
@@ -64,7 +43,7 @@ void ZCompressor::close()
         {
             QIODevice::close();
             if (!m_end)
-                m_state = def(0, 0, Z_FINISH);
+                m_state = def(reinterpret_cast<unsigned char*>(0), 0, Z_FINISH);
             deflateEnd(&m_strm);
         }
         else
@@ -80,13 +59,9 @@ void ZCompressor::setDevice(QIODevice *device)
     if (!isOpen() && m_device != device)
     {
         if (m_device)
-            //disconnect(m_device, SIGNAL(readyRead()), this, SIGNAL(readyRead()));
-            //Проверить!
             disconnect(m_device, &QIODevice::readyRead, this, &ZCompressor::readyRead);
 
         m_device = device;
-        //connect(m_device, SIGNAL(readyRead()), SIGNAL(readyRead()));
-        //Проверить!
         connect(m_device, &QIODevice::readyRead, this, &ZCompressor::readyRead);
     }
 }
@@ -94,8 +69,8 @@ void ZCompressor::setDevice(QIODevice *device)
 qint64 ZCompressor::writeData(const char *data, qint64 len)
 {
     if (!m_end)
-    {
-        m_state = def((unsigned char*)data, len, Z_NO_FLUSH);
+    {        
+        m_state = def(reinterpret_cast<unsigned char*>(const_cast<char*>(data)), len, Z_NO_FLUSH);
         if (m_state == Z_OK)
             return len;
         else
@@ -111,7 +86,8 @@ qint64 ZCompressor::writeData(const char *data, qint64 len)
 int ZCompressor::def(unsigned char *data, qint64 length, int flush)
 {
     int ret = Z_OK;
-    m_strm.avail_in = length;
+    //Potential truncation!
+    m_strm.avail_in = static_cast<decltype(m_strm.avail_in)>(length);
     m_strm.next_in = data;
 
     do
@@ -123,7 +99,7 @@ int ZCompressor::def(unsigned char *data, qint64 length, int flush)
         Q_ASSERT(ret != Z_STREAM_ERROR);
 
         qint64 have = CHUNK - m_strm.avail_out;
-        if (m_device->write((char*)m_buffer.data(), have) != have)
+        if (m_device->write(reinterpret_cast<char*>(m_buffer.data()), have) != have)
         {
             ret = Z_ERRNO;
             setErrorString("error writing device");
@@ -145,9 +121,9 @@ int ZCompressor::def(QIODevice *src, QIODevice *dest, int level, CompressFormat 
     unsigned char out[CHUNK];
 
     z_stream strm;
-    strm.zalloc = Z_NULL;
-    strm.zfree = Z_NULL;
-    strm.opaque = Z_NULL;
+    strm.zalloc = reinterpret_cast<decltype(strm.zalloc)>(Z_NULL);
+    strm.zfree = reinterpret_cast<decltype(strm.zfree)>(Z_NULL);
+    strm.opaque = reinterpret_cast<decltype(strm.opaque)>(Z_NULL);
 
     ret = defInit(&strm, level, format);
     if (ret != Z_OK)
@@ -155,16 +131,17 @@ int ZCompressor::def(QIODevice *src, QIODevice *dest, int level, CompressFormat 
 
     do
     {
-        qint64 avail = src->read((char*)in, CHUNK);
+        qint64 avail = src->read(reinterpret_cast<char*>(in), CHUNK);
         if (avail < 0)
         {
             deflateEnd(&strm);
             return Z_ERRNO;
         }
-        strm.avail_in = avail;
+        //Potential truncation!
+        strm.avail_in = static_cast<decltype(strm.avail_in)>(avail);
 
         flush = src->atEnd() ? Z_FINISH : Z_NO_FLUSH;
-        strm.next_in = (unsigned char*)in;
+        strm.next_in = reinterpret_cast<unsigned char*>(in);
 
         do
         {
@@ -175,7 +152,7 @@ int ZCompressor::def(QIODevice *src, QIODevice *dest, int level, CompressFormat 
             Q_ASSERT(ret != Z_STREAM_ERROR);
 
             have = CHUNK - strm.avail_out;
-            if (dest->write((char*)out, have) != have)
+            if (dest->write(reinterpret_cast<char*>(out), have) != have)
             {
                 deflateEnd(&strm);
                 return Z_ERRNO;
@@ -191,28 +168,27 @@ int ZCompressor::def(QIODevice *src, QIODevice *dest, int level, CompressFormat 
     return Z_OK;
 }
 
-//Static. Single step compression.
+//static.
 int ZCompressor::def(const QByteArray &src, QIODevice *dest, int level, CompressFormat format)
 {
     int ret;
-    unsigned have;
-    unsigned availOut = compressBound(src.size());
+    unsigned long availOut = compressBound(static_cast<unsigned long>(src.size()));
     QScopedArrayPointer<unsigned char> out(new unsigned char[availOut]);
     QScopedArrayPointer<unsigned char> in(new unsigned char[src.size()]);
 
     z_stream strm;
-    strm.zalloc = Z_NULL;
-    strm.zfree = Z_NULL;
-    strm.opaque = Z_NULL;
+    strm.zalloc = reinterpret_cast<decltype(strm.zalloc)>(Z_NULL);
+    strm.zfree = reinterpret_cast<decltype(strm.zfree)>(Z_NULL);
+    strm.opaque = reinterpret_cast<decltype(strm.opaque)>(Z_NULL);
 
     ret = defInit(&strm, level, format);
     if (ret != Z_OK)
         return ret;
 
-    strm.avail_in = src.size();
-    memcpy(in.data(), src.data(), src.size());
+    strm.avail_in = static_cast<decltype(strm.avail_in)>(src.size());
+    memcpy(in.data(), src.data(), static_cast<size_t>(src.size()));
     strm.next_in = in.data();
-    strm.avail_out = availOut;
+    strm.avail_out = static_cast<decltype(strm.avail_out)>(availOut);
     strm.next_out = out.data();
 
     do
@@ -220,8 +196,8 @@ int ZCompressor::def(const QByteArray &src, QIODevice *dest, int level, Compress
         ret = deflate(&strm, Z_FINISH);
         Q_ASSERT(ret != Z_STREAM_ERROR);
 
-        have = availOut - strm.avail_out;
-        if (dest->write((char*)out.data(), have) != have)
+        qint64 have = static_cast<qint64>(availOut - strm.avail_out);
+        if (dest->write(reinterpret_cast<char*>(out.data()), have) != have)
         {
             deflateEnd(&strm);
             return Z_ERRNO;
@@ -240,7 +216,7 @@ qint64 ZCompressor::readData(char *data, qint64 maxlen)
     if (!m_end)
     {
         qint64 have;
-        m_state = inf((unsigned char*)data, maxlen, have);
+        m_state = inf(reinterpret_cast<unsigned char*>(data), maxlen, have);
         if (m_state != Z_OK)
             m_end = true;
 
@@ -255,33 +231,24 @@ int ZCompressor::inf(unsigned char *data, qint64 length, qint64 &have)
     int ret = Z_OK;
     have = 0;
 
-    //Not update if out not full.
-    m_strm.avail_out = length;
+    //No update if out not full.
+    m_strm.avail_out = static_cast<decltype(m_strm.avail_out)>(length);
     m_strm.next_out = data;
 
     do
     {
         if (m_strm.avail_in <= 0)
         {
-            // qint64 avail = m_device->read((char*)m_buffer.data(), CHUNK);
-            qint64 ready = m_device->bytesAvailable();
-            if (ready>CHUNK)
-                ready=CHUNK;
-            qint64 avail = 0;
-            if (ready>0)
+            qint64 avail = m_device->read(reinterpret_cast<char*>(m_buffer.data()), CHUNK);
+            if (avail < 0)
             {
-                avail=m_device->read((char*)m_buffer.data(), ready);
-
-                if (avail < 0)
-                {
-                    ret = Z_ERRNO;
-                    have = -1;
-                    setErrorString("error reading device");
-                    break;
-                }
-                m_strm.next_in = m_buffer.data();
+                ret = Z_ERRNO;
+                have = -1;
+                setErrorString("error reading device");
+                break;
             }
-            m_strm.avail_in = avail;
+            //Potential truncation!
+            m_strm.avail_in = static_cast<decltype(m_strm.avail_in)>(avail);
 
             if (avail == 0)
             {
@@ -294,6 +261,8 @@ int ZCompressor::inf(unsigned char *data, qint64 length, qint64 &have)
                 }
                 break;
             }
+
+            m_strm.next_in = m_buffer.data();
         }
 
         ret = inflate(&m_strm, Z_NO_FLUSH);
@@ -305,6 +274,7 @@ int ZCompressor::inf(unsigned char *data, qint64 length, qint64 &have)
             return ret;
         case Z_NEED_DICT:
             ret = Z_DATA_ERROR;
+        [[clang::fallthrough]];
         case Z_DATA_ERROR:
         case Z_MEM_ERROR:
             have = -1;
@@ -328,11 +298,11 @@ int ZCompressor::inf(QIODevice *src, QIODevice *dest, CompressFormat format)
     unsigned char out[CHUNK];
 
     z_stream strm;
-    strm.zalloc = Z_NULL;
-    strm.zfree = Z_NULL;
-    strm.opaque = Z_NULL;
+    strm.zalloc = reinterpret_cast<decltype(strm.zalloc)>(Z_NULL);
+    strm.zfree = reinterpret_cast<decltype(strm.zfree)>(Z_NULL);
+    strm.opaque = reinterpret_cast<decltype(strm.opaque)>(Z_NULL);
     strm.avail_in = 0;
-    strm.next_in = Z_NULL;
+    strm.next_in = reinterpret_cast<decltype(strm.next_in)>(Z_NULL);
 
     ret = infInit(&strm, format);
     if (ret != Z_OK)
@@ -340,13 +310,14 @@ int ZCompressor::inf(QIODevice *src, QIODevice *dest, CompressFormat format)
 
     do
     {
-        qint64 avail = src->read((char*)in, CHUNK);
+        qint64 avail = src->read(reinterpret_cast<char*>(in), CHUNK);
         if (avail < 0)
         {
             inflateEnd(&strm);
             return Z_ERRNO;
         }
-        strm.avail_in = avail;
+        //Potential truncation!
+        strm.avail_in = static_cast<decltype(strm.avail_in)>(avail);
 
         //End of file but not compressed stream.
         if (strm.avail_in == 0)
@@ -365,6 +336,7 @@ int ZCompressor::inf(QIODevice *src, QIODevice *dest, CompressFormat format)
             {
             case Z_NEED_DICT:
                 ret = Z_DATA_ERROR;
+            [[clang::fallthrough]];
             case Z_DATA_ERROR:
             case Z_MEM_ERROR:
                 inflateEnd(&strm);
@@ -372,7 +344,7 @@ int ZCompressor::inf(QIODevice *src, QIODevice *dest, CompressFormat format)
             }
 
             have = CHUNK - strm.avail_out;
-            if (dest->write((char*)out, have) != have)
+            if (dest->write(reinterpret_cast<char*>(out), have) != have)
             {
                 inflateEnd(&strm);
                 return Z_ERRNO;
@@ -389,13 +361,13 @@ int ZCompressor::inf(QIODevice *src, QIODevice *dest, CompressFormat format)
 //static.
 int ZCompressor::defInit(z_stream *strm, int level, CompressFormat format)
 {
-    strm->zalloc = Z_NULL;
-    strm->zfree = Z_NULL;
-    strm->opaque = Z_NULL;
+    strm->zalloc = reinterpret_cast<decltype(strm->zalloc)>(Z_NULL);
+    strm->zfree = reinterpret_cast<decltype(strm->zfree)>(Z_NULL);
+    strm->opaque = reinterpret_cast<decltype(strm->opaque)>(Z_NULL);
     strm->avail_in = 0;
-    strm->next_in = Z_NULL;
+    strm->next_in = reinterpret_cast<decltype(strm->next_in)>(Z_NULL);
     strm->avail_out = 0;
-    strm->next_out = Z_NULL;
+    strm->next_out = reinterpret_cast<decltype(strm->next_out)>(Z_NULL);
 
     switch (format)
     {
@@ -405,21 +377,21 @@ int ZCompressor::defInit(z_stream *strm, int level, CompressFormat format)
         return deflateInit2(strm, level, Z_DEFLATED, 30, 8, Z_DEFAULT_STRATEGY);
     case RawDeflateFormat:
         return deflateInit2(strm, level, Z_DEFLATED, -MAX_WBITS, 8, Z_DEFAULT_STRATEGY);
-    default:
-        return Z_ERRNO;
     }
+
+    return Z_ERRNO;
 }
 
 //static.
 int ZCompressor::infInit(z_stream *strm, CompressFormat format)
 {
-    strm->zalloc = Z_NULL;
-    strm->zfree = Z_NULL;
-    strm->opaque = Z_NULL;
+    strm->zalloc = reinterpret_cast<decltype(strm->zalloc)>(Z_NULL);
+    strm->zfree = reinterpret_cast<decltype(strm->zfree)>(Z_NULL);
+    strm->opaque = reinterpret_cast<decltype(strm->opaque)>(Z_NULL);
     strm->avail_in = 0;
-    strm->next_in = Z_NULL;
+    strm->next_in = reinterpret_cast<decltype(strm->next_in)>(Z_NULL);
     strm->avail_out = 0;
-    strm->next_out = Z_NULL;
+    strm->next_out = reinterpret_cast<decltype(strm->next_out)>(Z_NULL);
 
     switch (format)
     {
@@ -429,7 +401,7 @@ int ZCompressor::infInit(z_stream *strm, CompressFormat format)
         return inflateInit2(strm, 30);
     case RawDeflateFormat:
         return inflateInit2(strm, -MAX_WBITS);
-    default:
-        return Z_ERRNO;
     }
+
+    return Z_ERRNO;
 }

@@ -33,9 +33,22 @@ class ZipWriter : public QObject
     Q_OBJECT
 
 public:
-    ZipWriter();
-    ZipWriter(QIODevice *out);
-    virtual ~ZipWriter();
+    ZipWriter()
+    {
+        m_strm.setByteOrder(QDataStream::LittleEndian);
+        m_cmprs.setCompressFormat(ZCompressor::RawDeflateFormat);
+        m_cmprs.setCompressLevel(8);
+    }
+
+    ZipWriter(QIODevice *out)
+        : m_strm(out)
+    {
+        m_strm.setByteOrder(QDataStream::LittleEndian);
+        m_cmprs.setCompressFormat(ZCompressor::RawDeflateFormat);
+        m_cmprs.setCompressLevel(8);
+    }
+
+    ~ZipWriter() = default;
 
     bool writeFile(const QString &name, const QByteArray &bytes);
     bool writeStartFile(const QString &name);
@@ -49,7 +62,7 @@ public:
         m_cmprs.close();
     }
 
-    QIODevice* device() const
+    QIODevice* device() const noexcept
     {
         return m_strm.device();
     }
@@ -57,23 +70,20 @@ public:
 private:
     void appendLocalFileHeader(const ZipHeader &header);
 
-    qint32 centralDirectorySize()
+    quint32 centralDirectorySize() const
     {
-        qint32 result = 0;
-        for (int i = 0, size = m_headers.size(); i < size; ++i)
-            result += 46 + m_headers.at(i).name().size();
+        quint32 result = 0;
+        for (const auto &header : m_headers)
+            result += 46 + header.nameSize();
 
         return result;
     }
 
-    qint32 centralDirectoryOffset()
+    quint32 centralDirectoryOffset() const
     {
-        qint32 result = 0;
-        for (int i = 0, size = m_headers.size(); i < size; ++i)
-        {
-            const ZipHeader header = m_headers.at(i);
-            result += 30 + header.name().size() + header.compressedSize();
-        }
+        quint32 result = 0;
+        for (const auto &header : m_headers)
+            result += 30 + header.nameSize() + header.compressedSize();
 
         return result;
     }

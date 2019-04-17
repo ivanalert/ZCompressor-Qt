@@ -29,33 +29,36 @@ class ZipHeader
 {
 public:
     ZipHeader();
-    ZipHeader(const QString &name, qint64 offset);
-    ZipHeader(const QString &name, qint64 offset, qint32 crc32, qint32 cSize, qint32 uSize);
+    ZipHeader(const QString &name, quint32 offset);
+    ZipHeader(const QString &name, quint32 offset, quint32 crc32, quint32 cSize, quint32 uSize);
     ZipHeader(const ZipHeader &other);
     ZipHeader& operator=(const ZipHeader &other);
+    ZipHeader(ZipHeader &&other) noexcept;
+    ZipHeader& operator=(ZipHeader &&other) noexcept;
     ~ZipHeader();
 
+    //Name size limit is quint16 max value.
     void setName(const QString &name);
-    QByteArray name() const;
-    qint16 nameSize() const;
+    QByteArray name() const noexcept;
+    quint16 nameSize() const noexcept;
 
     void setTime(const QTime &time);
-    qint16 time() const;
+    quint16 time() const noexcept;
 
     void setDate(const QDate &date);
-    qint16 date() const;
+    quint16 date() const noexcept;
 
-    void setOffset(qint32 offset);
-    qint32 offset() const;
+    void setOffset(quint32 offset) noexcept;
+    quint32 offset() const noexcept;
 
-    void setCrc32(qint32 crc32);
-    qint32 crc32() const;
+    void setCrc32(quint32 crc32) noexcept;
+    quint32 crc32() const noexcept;
 
-    void setCompressedSize(qint32 size);
-    qint32 compressedSize() const;
+    void setCompressedSize(quint32 size) noexcept;
+    quint32 compressedSize() const noexcept;
 
-    void setUncompressedSize(qint32 size);
-    qint32 uncompressedSize() const;
+    void setUncompressedSize(quint32 size) noexcept;
+    quint32 uncompressedSize() const noexcept;
 
 private:
     QSharedDataPointer<ZipHeaderData> m_data;

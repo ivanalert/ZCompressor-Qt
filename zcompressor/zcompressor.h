@@ -33,9 +33,23 @@ public:
         RawDeflateFormat
     };
 
-    explicit ZCompressor(QObject *parent = nullptr);
-    explicit ZCompressor(QIODevice *device, QObject *parent = nullptr);
-    ~ZCompressor() override;
+    explicit ZCompressor(QObject *parent = nullptr)
+        : QIODevice(parent), m_buffer(reinterpret_cast<unsigned char*>(malloc(CHUNK)))
+    {
+
+    }
+
+    explicit ZCompressor(QIODevice *device, QObject *parent = nullptr)
+        : QIODevice(parent), m_device(device),
+          m_buffer(reinterpret_cast<unsigned char*>(malloc(CHUNK)))
+    {
+        connect(m_device, &QIODevice::readyRead, this, &ZCompressor::readyRead);
+    }
+
+    ~ZCompressor() override
+    {
+        close();
+    }
 
     // QIODevice interface
     bool open(OpenMode mode) override;
@@ -68,7 +82,7 @@ public:
     qint64 bytesToWrite() const override
     {
         if (openMode() & QIODevice::WriteOnly)
-        {
+        {   
             qint64 result = QIODevice::bytesToWrite();
             if (result <= 0)
                 result = m_device->bytesToWrite() + m_strm.avail_in;
@@ -85,42 +99,42 @@ public:
 
     void setDevice(QIODevice *device);
 
-    QIODevice* device() const
+    QIODevice* device() const noexcept
     {
         return m_device;
     }
 
-    void setCompressLevel(int level)
+    void setCompressLevel(int level) noexcept
     {
         m_level = level;
     }
 
-    int compressLevel() const
+    int compressLevel() const noexcept
     {
         return m_level;
     }
 
-    void setCompressFormat(CompressFormat format)
+    void setCompressFormat(CompressFormat format) noexcept
     {
         m_format = format;
     }
 
-    CompressFormat compressFormat() const
+    CompressFormat compressFormat() const noexcept
     {
         return m_format;
     }
 
-    int state() const
+    int state() const noexcept
     {
         return m_state;
     }
 
-    unsigned long totalIn() const
+    unsigned long totalIn() const noexcept
     {
         return m_strm.total_in;
     }
 
-    unsigned long totalOut() const
+    unsigned long totalOut() const noexcept
     {
         return m_strm.total_out;
     }
@@ -134,17 +148,17 @@ private:
     static int defInit(z_stream *strm, int level, CompressFormat format);
     static int infInit(z_stream *strm, CompressFormat format);
 
-    static const unsigned CHUNK;
+    static const unsigned CHUNK{16384};
 
     int def(unsigned char *data, qint64 length, int flush);
     int inf(unsigned char *data, qint64 length, qint64 &have);
 
-    QIODevice *m_device;
+    QIODevice *m_device{nullptr};
     z_stream m_strm;
-    int m_level;
-    CompressFormat m_format;
-    int m_state;
-    bool m_end;
+    int m_level{6};
+    CompressFormat m_format{ZlibFormat};
+    int m_state{Z_OK};
+    bool m_end{false};
 
     QScopedPointer<unsigned char, QScopedPointerPodDeleter> m_buffer;
 };

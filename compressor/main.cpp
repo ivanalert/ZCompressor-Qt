@@ -19,7 +19,7 @@
 #include <QCommandLineParser>
 #include <QFile>
 #include <QString>
-#include <QDebug>
+#include <iostream>
 
 int main(int argc, char *argv[])
 {
@@ -45,17 +45,19 @@ int main(int argc, char *argv[])
     parser.addHelpOption();
     parser.process(app);
 
+    using namespace std;
+
     //Check file arguments.
-    const QStringList args = parser.positionalArguments();
+    const auto args = parser.positionalArguments();
     if (args.size() < 2)
     {
-        qDebug() << "Too few arguments!";
+        cout << "Too few arguments!" << endl;
         return 1;
     }
 
     //Check format option if present.
-    const QString frmtVal = parser.value(formatOpt);
-    ZCompressor::CompressFormat frmt = ZCompressor::ZlibFormat;
+    const auto frmtVal = parser.value(formatOpt);
+    auto frmt = ZCompressor::ZlibFormat;
     if (!frmtVal.compare(QStringLiteral("Zlib"), Qt::CaseInsensitive))
     { }
     else if (!frmtVal.compare(QStringLiteral("Gzip"), Qt::CaseInsensitive))
@@ -64,23 +66,23 @@ int main(int argc, char *argv[])
         frmt = ZCompressor::RawDeflateFormat;
     else
     {
-        qDebug() << "Invalid compression format! Must be Zlib, Gzip or RawDeflate.";
+        cout << "Invalid compression format! Must be Zlib, Gzip or RawDeflate." << endl;
         return 1;
     }
 
     //Check compression level if decompression option is not set.
-    int lvl = -2;
-    const bool decmp = parser.isSet(decmpOpt);
+    auto lvl = -2;
+    const auto decmp = parser.isSet(decmpOpt);
     if (!decmp)
     {
-        const QString lvlVal = parser.value(lvlOpt);
-        bool ok = false;
+        const auto lvlVal = parser.value(lvlOpt);
+        auto ok = false;
         lvl = lvlVal.toInt(&ok);
         if (!ok)
         {
             if (!lvlVal.isEmpty())
             {
-                qDebug() << "Invalid compression level! Must be from 0 to 9.";
+                cout << "Invalid compression level! Must be from 0 to 9." << endl;
                 return 1;
             }
             else
@@ -88,7 +90,7 @@ int main(int argc, char *argv[])
         }
         else if (lvl < 0 || lvl > 9)
         {
-            qDebug() << "Invalid compression level range! Must be from 0 to 9.";
+            cout << "Invalid compression level range! Must be from 0 to 9." << endl;
             return 1;
         }
     }
@@ -99,12 +101,12 @@ int main(int argc, char *argv[])
     if (!src.open(QIODevice::ReadOnly) || !dest.open(QIODevice::WriteOnly))
     {
         //Files closes in destructor if necessary.
-        qDebug() << "Can't open source or destination file!";
+        cout << "Can't open source or destination file!" << endl;
         return 1;
     }
 
     //Compress or decompress.
-    int ret = 0;
+    auto ret = 0;
     if (decmp)
         ret = ZCompressor::inf(&src, &dest, frmt);
     else
@@ -116,12 +118,12 @@ int main(int argc, char *argv[])
     //Success or failed compression.
     if (ret == 0)
     {
-        qDebug() << "Success!";
+        cout << "Success!" << endl;
         return 0;
     }
     else
     {
-        qDebug() << "Failed!";
+        cout << "Failed!" << endl;
         return 1;
     }
 }

@@ -22,26 +22,6 @@
 #include <QBuffer>
 #include <QDateTime>
 
-ZipWriter::ZipWriter()
-{
-    m_strm.setByteOrder(QDataStream::LittleEndian);
-    m_cmprs.setCompressFormat(ZCompressor::RawDeflateFormat);
-    m_cmprs.setCompressLevel(8);
-}
-
-ZipWriter::ZipWriter(QIODevice *out)
-    : m_strm(out)
-{
-    m_strm.setByteOrder(QDataStream::LittleEndian);
-    m_cmprs.setCompressFormat(ZCompressor::RawDeflateFormat);
-    m_cmprs.setCompressLevel(8);
-}
-
-ZipWriter::~ZipWriter()
-{
-
-}
-
 void ZipWriter::appendLocalFileHeader(const ZipHeader &header)
 {
     //Local file header.
@@ -90,11 +70,14 @@ bool ZipWriter::writeFile(const QString &name, const QByteArray &bytes)
     if (ZCompressor::def(bytes, &buff, 8, ZCompressor::RawDeflateFormat) != Z_OK)
         return false;
 
-    ZipHeader header(name, m_strm.device()->pos(),
-                     crc32(0, (const unsigned char*)bytes.data(), bytes.size()), 0, bytes.size());
+    //Convert qint64 offset to quint32 (Zip header format, Zip64 will be later)!
+    ZipHeader header(name, static_cast<quint32>(m_strm.device()->pos()),
+                     crc32(0, reinterpret_cast<const unsigned char*>(bytes.data()),
+                           static_cast<quint32>(bytes.size())),
+                     0, static_cast<quint32>(bytes.size()));
     header.setTime(QTime::currentTime());
     header.setDate(QDate::currentDate());
-    header.setCompressedSize(comprBytes.size());
+    header.setCompressedSize(static_cast<quint32>(comprBytes.size()));
     appendLocalFileHeader(header);
 
     //Compressed bytes.
@@ -107,7 +90,8 @@ bool ZipWriter::writeStartFile(const QString &name)
     m_cmprs.setDevice(m_strm.device());
     if (m_cmprs.open(QIODevice::WriteOnly))
     {
-        ZipHeader header(name, m_strm.device()->pos());
+        //Convert qint64 offset to quint32 (Zip header format, Zip64 will be later)!
+        ZipHeader header(name, static_cast<quint32>(m_strm.device()->pos()));
         header.setTime(QTime::currentTime());
         header.setDate(QDate::currentDate());
         appendLocalFileHeader(header);
@@ -120,12 +104,13 @@ bool ZipWriter::writeStartFile(const QString &name)
 
 bool ZipWriter::writeBytes(const QByteArray &bytes)
 {
-    int count = m_cmprs.write(bytes);
+    qint64 count = m_cmprs.write(bytes);
     if (count > 0)
-    {
+    {   
         ZipHeader &header = m_headers[m_headers.size() - 1];
-        header.setCrc32(crc32(header.crc32(), (const unsigned char*)bytes.data(), bytes.size()));
-        header.setUncompressedSize(header.uncompressedSize() + bytes.size());
+        header.setCrc32(crc32(header.crc32(), reinterpret_cast<const unsigned char*>(bytes.data()),
+                              static_cast<quint32>(bytes.size())));
+        header.setUncompressedSize(header.uncompressedSize() + static_cast<quint32>(bytes.size()));
     }
 
     return count != -1;
