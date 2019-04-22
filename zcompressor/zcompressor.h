@@ -148,7 +148,7 @@ private:
     static int defInit(z_stream *strm, int level, CompressFormat format);
     static int infInit(z_stream *strm, CompressFormat format);
 
-    static const unsigned CHUNK{16384};
+    constexpr static unsigned CHUNK{16384};
 
     int def(unsigned char *data, qint64 length, int flush);
     int inf(unsigned char *data, qint64 length, qint64 &have);
